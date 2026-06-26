@@ -4,7 +4,7 @@
 
 ## 🚀 快速開始
 您可以直接透過瀏覽器訪問部署後的版本：
-👉 **[https://mf-studio-lab.github.io/minecraft-world-2.0/](https://mf-studio-lab.github.io/minecraft-world-2.0/)**
+👉 **[https://mf-studio-lab.github.io/minecraft-world-2.0/](https://mf-studio-lab.github.io/minecraft-world/)**
 
 ---
 
