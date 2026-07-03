@@ -389,21 +389,22 @@ html, body {
   <div class="mobile-panel left">
     <div class="mobile-row">
       <button class="mobile-btn" id="btn-left">◀</button>
-      <button class="mobile-btn" id="btn-jump">⤴</button>
       <button class="mobile-btn" id="btn-right">▶</button>
     </div>
-    <div class="mobile-label">可同時按住跳躍+左右</div>
+    <div class="mobile-label">左右移動（可與右側跳躍同時按）</div>
   </div>
   <div class="mobile-panel right">
     <div class="mobile-row">
+      <button class="mobile-btn" id="btn-jump">⤴</button>
       <button class="mobile-btn" id="btn-action">🪓</button>
       <button class="mobile-btn" id="btn-place">🧱</button>
     </div>
     <div class="mobile-row">
+      <button class="mobile-btn" id="btn-dig">🔽</button>
       <button class="mobile-btn small" id="btn-craft">📦</button>
       <button class="mobile-btn small" id="btn-eat">🍖</button>
     </div>
-    <div class="mobile-label">操作 / 合成 / 吃東西</div>
+    <div class="mobile-label">跳躍/操作/向下挖/合成/吃東西</div>
   </div>
 </div>
 
@@ -428,9 +429,10 @@ const AIR=0,GRASS=1,DIRT=2,STONE=3,WOOD=4,LEAVES=5,SAND=6,WATER=7,
       PORK=17,BEEF=18,CHICKEN=19,FISH=20,ROTTEN=21,BONE=22,ARROW=23,
       WOOD_SWORD=24,STONE_SWORD=25,IRON_SWORD=26,GOLD_SWORD=27,DIAM_SWORD=28,
       WOOD_PICK=29,STONE_PICK=30,IRON_PICK=31,GOLD_PICK=32,DIAM_PICK=33,
-      BOW=34,COOKED_PORK=35,COOKED_BEEF=36,COOKED_CHICKEN=37,COOKED_FISH=38;
+      BOW=34,COOKED_PORK=35,COOKED_BEEF=36,COOKED_CHICKEN=37,COOKED_FISH=38,
+      SEED=39,SAPLING=40;
 
-const HARDNESS = [0,4,3,14,10,2,3,0,99,14,18,24,32,4,16,6,1,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99];
+const HARDNESS = [0,4,3,14,10,2,3,0,99,14,18,24,32,4,16,6,1,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,0,2];
 const NAMES = [
   '空氣','草地','泥土','石頭','原木','葉子','沙子','水','基岩',
   '煤礦石','鐵礦石','金礦石','鑽石礦','木板','磚塊','玻璃','火把',
@@ -450,6 +452,9 @@ const EMOJIS = {
   [WOOD_PICK]:'⛏️',[STONE_PICK]:'⛏️',[IRON_PICK]:'⛏️',[GOLD_PICK]:'⛏️',[DIAM_PICK]:'⛏️',
   [BOW]:'🏹',[COOKED_PORK]:'🍖',[COOKED_BEEF]:'🍖',[COOKED_CHICKEN]:'🍗',[COOKED_FISH]:'🍣'
 };
+
+EMOJIS[SEED] = '🌱';
+EMOJIS[SAPLING] = '🌱';
 
 const FOOD_VALUE = {
   [PORK]:3,[BEEF]:3,[CHICKEN]:2,[FISH]:2,[COOKED_PORK]:8,[COOKED_BEEF]:8,[COOKED_CHICKEN]:6,[COOKED_FISH]:5,[ROTTEN]:4
@@ -507,8 +512,17 @@ const RECIPES = [
 
 // ─── World ────────────────────────────────────────────────────────────────────
 let world = new Uint8Array(WW*WH);
-function gb(x,y){ if(x<0||x>=WW||y<0||y>=WH) return BED; return world[y*WW+x]; }
-function sb(x,y,v){ if(x<0||x>=WW||y<0||y>=WH) return; world[y*WW+x]=v; }
+function gb(x,y){
+  if(y<0||y>=WH) return BED;
+  // wrap horizontally so map is cyclic
+  x = ((x % WW) + WW) % WW;
+  return world[y*WW + x];
+}
+function sb(x,y,v){
+  if(y<0||y>=WH) return;
+  x = ((x % WW) + WW) % WW;
+  world[y*WW + x] = v;
+}
 
 function sn(x,seed){ const v=Math.sin(x*0.37+seed*127.1)*43758.5453; return v-Math.floor(v); }
 function sm(x,seed){ const i=Math.floor(x),f=x-i,t=f*f*(3-2*f); return sn(i,seed)*(1-t)+sn(i+1,seed)*t; }
@@ -554,7 +568,8 @@ function genWorld(){
         for(const pt of river){
           const dx = x - pt.x;
           const dy = y - pt.y;
-          if(Math.abs(dx) <= 2 && Math.abs(dy) <= 1 && y >= sh-1 && y <= sh+3){
+          // only fill water in depressions (below surface)
+          if(Math.abs(dx) <= 2 && Math.abs(dy) <= 1 && y > sh){
             inRiver = true;
             break;
           }
@@ -1056,7 +1071,8 @@ function showMsg(text){
 // ─── Player ───────────────────────────────────────────────────────────────────
 const pl = { x:0,y:0,vx:0,vy:0,w:TS*0.75,h:TS*1.85,onGround:false,
              face:1,wf:0,wt:0,hp:20,maxHp:20,hunger:20,maxHunger:20,
-             inv:0,poisonTimer:0,attackCD:0,arrowCD:0 };
+             inv:0,poisonTimer:0,attackCD:0,arrowCD:0,
+             oxygen:100, maxOxygen:100 };
 const cam = { x:0,y:0 };
 const keys = {};
 let mx=0,my=0,mleft=false;
@@ -1067,6 +1083,7 @@ let breaking = null;
 let placeCD = 0;
 const inventory = {};
 let particles = [];
+let plantedSaplings = [];
 let dayTime = 6200;
 let lastMonsterSpawn = 0;
 let craftingOpen = false;
@@ -1125,6 +1142,20 @@ function update(){
     }
   }
 
+  // Oxygen / underwater handling
+  const pcx = Math.floor((pl.x + pl.w/2)/TS);
+  const pcy = Math.floor((pl.y + pl.h/2)/TS);
+  const inWater = (gb(pcx,pcy)===WATER);
+  if(inWater){
+    pl.oxygen = Math.max(0, pl.oxygen - 0.28);
+    if(pl.oxygen <= 0 && Math.random() < 0.02){
+      pl.hp -= 1;
+      if(pl.hp <= 0) die('溺水而亡');
+    }
+  } else {
+    pl.oxygen = Math.min(pl.maxOxygen, pl.oxygen + 0.6);
+  }
+
   // 怪物生成
   if(isNight() && dayTime - lastMonsterSpawn > 2000){
     spawnMonsters();
@@ -1157,14 +1188,18 @@ function update(){
   pl.x+=pl.vx; collideH();
   pl.y+=pl.vy; collideV();
 
-  pl.x=Math.max(0,Math.min(WW*TS-pl.w,pl.x));
+  // horizontal wrap-around for cyclic map
+  if(pl.x < 0) pl.x += WW*TS;
+  else if(pl.x > WW*TS - pl.w) pl.x -= WW*TS;
   if(pl.y>WH*TS){ pl.y=(surf[Math.floor(pl.x/TS)]-3)*TS; pl.vy=0; }
 
   // Camera
   const tcx=pl.x+pl.w/2-W/2, tcy=pl.y+pl.h/2-H/2;
   cam.x+=(tcx-cam.x)*0.12;
   cam.y+=(tcy-cam.y)*0.12;
-  cam.x=Math.max(0,Math.min(WW*TS-W,cam.x));
+  // wrap camera horizontally as world is cyclic
+  const worldPx = WW*TS;
+  cam.x = ((cam.x % worldPx) + worldPx) % worldPx;
   cam.y=Math.max(0,Math.min(WH*TS-H,cam.y));
 
   // Attack entities with left click
@@ -1233,7 +1268,10 @@ function update(){
         if(breaking.p>=breaking.max){
           if(b===WOOD) inventory[WOOD]=(inventory[WOOD]||0)+1;
           else if(b===LEAVES){
-            if(Math.random()<0.1) inventory[WOOD]=(inventory[WOOD]||0)+1;
+            // chance to get seeds from leaves
+            if(Math.random()<0.12) inventory[SEED]=(inventory[SEED]||0)+1;
+            // small chance to drop wood/or twig
+            if(Math.random()<0.08) inventory[WOOD]=(inventory[WOOD]||0)+1;
           }
           else if(b>=GRASS && b<=GLASS) inventory[b]=(inventory[b]||0)+1;
           else if(b>=COAL && b<=DIAM) inventory[b]=(inventory[b]||0)+1;
@@ -1251,6 +1289,23 @@ function update(){
   if(pl.arrowCD > 0) pl.arrowCD--;
 
   if(placeCD>0) placeCD--;
+
+  // Sapling growth
+  for(let i=plantedSaplings.length-1;i>=0;i--){
+    const s = plantedSaplings[i];
+    s.t++;
+    // grow after a while (approx ~12 seconds at 60fps)
+    if(s.t > 720){
+      // only grow if still placed and ground below is dirt or grass
+      const below = gb(s.x, s.y+1);
+      if(below===DIRT || below===GRASS){
+        placeTree(s.x, s.y+1);
+        sb(s.x, s.y, AIR);
+        showMsg('🌳 樹苗長成大樹！');
+      }
+      plantedSaplings.splice(i,1);
+    }
+  }
 
   // Entities update
   for(const e of entities) e.update();
@@ -1636,12 +1691,21 @@ function drawHUD(){
   cx.fillStyle='#fff';
   cx.fillText(`🍖 ${Math.floor(pl.hunger)}/${pl.maxHunger}`,18,59);
 
-  // Poison indicator
+  // Oxygen bar
+  cx.fillStyle='rgba(20,20,20,0.7)';
+  roundRect(cx,10,74,170,26,5); cx.fill();
+  const oxW = 150*(pl.oxygen/pl.maxOxygen);
+  cx.fillStyle='#4fc3f7';
+  cx.fillRect(15,79,oxW,16);
+  cx.fillStyle='#fff';
+  cx.fillText(`💨 ${Math.floor(pl.oxygen)}/${pl.maxOxygen}`,18,91);
+
+  // Poison indicator (moved down)
   if(pl.poisonTimer > 0){
     cx.fillStyle='rgba(0,100,0,0.7)';
-    roundRect(cx,10,74,120,22,5); cx.fill();
+    roundRect(cx,10,106,120,22,5); cx.fill();
     cx.fillStyle='#0f0';
-    cx.fillText(`☠ 中毒 ${Math.ceil(pl.poisonTimer/60)}s`,18,89);
+    cx.fillText(`☠ 中毒 ${Math.ceil(pl.poisonTimer/60)}s`,18,121);
   }
 
   // Time of day
@@ -2122,6 +2186,20 @@ function attemptPlaceBlock(){
   const py0=Math.floor(pl.y/TS), py1=Math.floor((pl.y+pl.h-1)/TS);
   if(t.x<px0||t.x>px1||t.y<py0||t.y>py1){
     const item = hotbar[slot];
+    // planting seeds on top of dirt
+    if(item===SEED){
+      // plant only if target is AIR and below is DIRT
+      if(gb(t.x,t.y)===AIR && gb(t.x,t.y+1)===DIRT){
+        if((inventory[item]||0) > 0){
+          inventory[item]--; if(inventory[item]<=0) delete inventory[item];
+          sb(t.x,t.y,SAPLING);
+          plantedSaplings.push({x:t.x,y:t.y,t:0});
+          showMsg('種下了 樹苗');
+        } else showMsg('❌ 沒有種子!');
+      } else showMsg('❌ 只能種在土上（別種在空中或方塊裡）');
+      return;
+    }
+
     if(item <= TORCH){
       if((inventory[item]||0) > 0 || item===GRASS){
         if(item!==GRASS){ inventory[item]--; if(inventory[item] <=0) delete inventory[item]; }
@@ -2154,9 +2232,22 @@ const mobileButtons = {
   jump: document.getElementById('btn-jump'),
   action: document.getElementById('btn-action'),
   place: document.getElementById('btn-place'),
+  dig: document.getElementById('btn-dig'),
   craft: document.getElementById('btn-craft'),
   eat: document.getElementById('btn-eat'),
 };
+
+function attemptDigDown(){
+  // target the tile just below player's feet
+  const tx = Math.floor((pl.x + pl.w/2)/TS);
+  const ty = Math.floor((pl.y + pl.h)/TS) + 1;
+  // set pointer coords so breaking logic targets this tile
+  mx = tx*TS + TS/2 - cam.x;
+  my = ty*TS + TS/2 - cam.y;
+  // simulate holding attack for a short moment
+  mleft = true;
+  setTimeout(()=>{ mleft = false; }, 500);
+}
 
 function isTouchInput(){
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
@@ -2188,6 +2279,7 @@ bindMobileButton(mobileButtons.right, ()=>setMobileKey('ArrowRight',true), ()=>s
 bindMobileButton(mobileButtons.jump, ()=>setMobileKey('ArrowUp',true), ()=>setMobileKey('ArrowUp',false));
 bindMobileButton(mobileButtons.action, ()=>{ mleft=true; }, ()=>{ mleft=false; });
 if(mobileButtons.place){ mobileButtons.place.addEventListener('touchstart', e=>{ e.preventDefault(); attemptPlaceBlock(); }, {passive:false}); mobileButtons.place.addEventListener('mousedown', e=>{ e.preventDefault(); attemptPlaceBlock(); }); }
+if(mobileButtons.dig){ mobileButtons.dig.addEventListener('touchstart', e=>{ e.preventDefault(); attemptDigDown(); }, {passive:false}); mobileButtons.dig.addEventListener('mousedown', e=>{ e.preventDefault(); attemptDigDown(); }); }
 if(mobileButtons.craft){ mobileButtons.craft.addEventListener('click', openCrafting); }
 if(mobileButtons.eat){ mobileButtons.eat.addEventListener('click', eatFood); }
 
