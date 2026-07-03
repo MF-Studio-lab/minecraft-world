@@ -202,6 +202,60 @@ html, body {
   font-size: 14px;
   animation: fadeOut 3s forwards;
 }
+#mobile-ui {
+  position: fixed;
+  inset: auto 0 14px 0;
+  display: none;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 12px;
+  z-index: 90;
+  pointer-events: none;
+}
+#mobile-ui.visible { display: flex; pointer-events: auto; }
+#mobile-ui .mobile-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#mobile-ui .mobile-panel.left {
+  align-items: flex-start;
+}
+#mobile-ui .mobile-panel.right {
+  align-items: flex-end;
+}
+#mobile-ui .mobile-btn {
+  width: 68px;
+  height: 68px;
+  border-radius: 18px;
+  border: 2px solid rgba(255,255,255,0.18);
+  background: rgba(20,20,20,0.75);
+  color: #fff;
+  font-size: 24px;
+  font-weight: bold;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+  cursor: pointer;
+  pointer-events: auto;
+}
+#mobile-ui .mobile-btn:active {
+  transform: scale(0.96);
+}
+#mobile-ui .mobile-row {
+  display: flex;
+  gap: 10px;
+}
+#mobile-ui .mobile-btn.small {
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
+}
+#mobile-ui .mobile-label {
+  color: #fff;
+  font-size: 12px;
+  text-align: center;
+  margin-top: -4px;
+  opacity: 0.9;
+}
 @keyframes fadeOut {
   0% { opacity: 1; }
   70% { opacity: 1; }
@@ -218,6 +272,7 @@ html, body {
     <p><span class="key">左鍵按住</span> 挖掘/攻擊 &nbsp;|&nbsp; <span class="key">右鍵</span> 放置方塊</p>
     <p><span class="key">1~8</span> 切換物品 &nbsp;|&nbsp; 滑鼠滾輪也可以切換</p>
     <p><span class="key">E</span> 打開合成表 &nbsp;|&nbsp; <span class="key">F</span> 吃東西</p>
+    <p style="color:#4fc3f7;">手機/平板請橫置，螢幕左右側會出現觸控操作按鈕。</p>
     <p style="color:#ffd700;">⭐ 挖掘礦石、蓋房子、狩獵動物、合成工具！</p>
     <p style="color:#ff6b6b;">⚠️ 晚上會出現殭屍和骷髏，小心生存！</p>
     <p style="color:#4fc3f7;">🌊 尋找河流釣魚，探索地底找鑽石！</p>
@@ -282,6 +337,27 @@ html, body {
 </div>
 
 <div id="msg-area"></div>
+<div id="mobile-ui">
+  <div class="mobile-panel left">
+    <div class="mobile-row">
+      <button class="mobile-btn" id="btn-left">◀</button>
+      <button class="mobile-btn" id="btn-jump">⤴</button>
+      <button class="mobile-btn" id="btn-right">▶</button>
+    </div>
+    <div class="mobile-label">移動 / 跳躍</div>
+  </div>
+  <div class="mobile-panel right">
+    <div class="mobile-row">
+      <button class="mobile-btn" id="btn-action">🪓</button>
+      <button class="mobile-btn" id="btn-place">🧱</button>
+    </div>
+    <div class="mobile-row">
+      <button class="mobile-btn small" id="btn-craft">📦</button>
+      <button class="mobile-btn small" id="btn-eat">🍖</button>
+    </div>
+    <div class="mobile-label">操作 / 合成 / 吃東西</div>
+  </div>
+</div>
 
 <script>
 const cv = document.getElementById('c');
@@ -1991,6 +2067,81 @@ cv.addEventListener('touchstart',e=>{
   mleft=true;
 },{passive:false});
 cv.addEventListener('touchend',e=>{ mleft=false; },{passive:false});
+
+function attemptPlaceBlock(){
+  if(placeCD>0) return;
+  const t=getTile();
+  if(!tileReach(t.x,t.y) || gb(t.x,t.y)!==AIR) return;
+  const px0=Math.floor(pl.x/TS), px1=Math.floor((pl.x+pl.w-1)/TS);
+  const py0=Math.floor(pl.y/TS), py1=Math.floor((pl.y+pl.h-1)/TS);
+  if(t.x<px0||t.x>px1||t.y<py0||t.y>py1){
+    const item = hotbar[slot];
+    if(item <= TORCH){
+      if((inventory[item]||0) > 0 || item===GRASS){
+        if(item!==GRASS){ inventory[item]--; if(inventory[item] <=0) delete inventory[item]; }
+        sb(t.x,t.y,item);
+        placeCD=12;
+        showMsg('放置了 '+NAMES[item]);
+      } else {
+        showMsg('❌ '+NAMES[item]+' 數量不足!');
+      }
+    } else {
+      showMsg('❌ '+NAMES[item]+' 不能放置!');
+    }
+  }
+}
+
+function setMobileKey(code,value){
+  keys['ArrowLeft']=keys['a']=keys['A']=false;
+  keys['ArrowRight']=keys['d']=keys['D']=false;
+  keys['ArrowUp']=keys['w']=keys['W']=false;
+  if(value) keys[code]=true;
+}
+
+const mobilePanel = document.getElementById('mobile-ui');
+const mobileButtons = {
+  left: document.getElementById('btn-left'),
+  right: document.getElementById('btn-right'),
+  jump: document.getElementById('btn-jump'),
+  action: document.getElementById('btn-action'),
+  place: document.getElementById('btn-place'),
+  craft: document.getElementById('btn-craft'),
+  eat: document.getElementById('btn-eat'),
+};
+
+function isTouchInput(){
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+}
+
+function updateMobileUI(){
+  const show = isTouchInput() && window.innerWidth > window.innerHeight;
+  if(mobilePanel){
+    mobilePanel.classList.toggle('visible', show);
+  }
+}
+
+function bindMobileButton(btn, onPress, onRelease){
+  if(!btn) return;
+  const start = e=>{ e.preventDefault(); onPress(); };
+  const end = e=>{ e.preventDefault(); if(onRelease) onRelease(); };
+  btn.addEventListener('touchstart', start, {passive:false});
+  btn.addEventListener('mousedown', start);
+  btn.addEventListener('touchend', end, {passive:false});
+  btn.addEventListener('mouseup', end);
+  btn.addEventListener('mouseleave', end);
+}
+
+bindMobileButton(mobileButtons.left, ()=>setMobileKey('ArrowLeft',true), ()=>setMobileKey('ArrowLeft',false));
+bindMobileButton(mobileButtons.right, ()=>setMobileKey('ArrowRight',true), ()=>setMobileKey('ArrowRight',false));
+bindMobileButton(mobileButtons.jump, ()=>setMobileKey('ArrowUp',true), ()=>setMobileKey('ArrowUp',false));
+bindMobileButton(mobileButtons.action, ()=>{ mleft=true; }, ()=>{ mleft=false; });
+if(mobileButtons.place){ mobileButtons.place.addEventListener('touchstart', e=>{ e.preventDefault(); attemptPlaceBlock(); }, {passive:false}); mobileButtons.place.addEventListener('mousedown', e=>{ e.preventDefault(); attemptPlaceBlock(); }); }
+if(mobileButtons.craft){ mobileButtons.craft.addEventListener('click', openCrafting); }
+if(mobileButtons.eat){ mobileButtons.eat.addEventListener('click', eatFood); }
+
+window.addEventListener('resize', updateMobileUI);
+window.addEventListener('orientationchange', updateMobileUI);
+updateMobileUI();
 
 // ─── Init & Loop ─────────────────────────────────────────────────────────────
 let started=false;
