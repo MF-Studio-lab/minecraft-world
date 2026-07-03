@@ -202,6 +202,40 @@ html, body {
   font-size: 14px;
   animation: fadeOut 3s forwards;
 }
+#hotbar-ui {
+  position: fixed;
+  top: 8px;
+  left: 10px;
+  right: 10px;
+  display: none;
+  justify-content: space-between;
+  z-index: 91;
+  pointer-events: none;
+}
+#hotbar-ui.visible {
+  display: flex;
+  pointer-events: auto;
+}
+#hotbar-ui .hotbar-panel {
+  display: flex;
+  gap: 6px;
+}
+#hotbar-ui .hotbar-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 2px solid rgba(255,255,255,0.16);
+  background: rgba(20,20,20,0.8);
+  color: #fff;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  pointer-events: auto;
+}
+#hotbar-ui .hotbar-btn.selected {
+  border-color: #ffd700;
+  background: rgba(255,215,0,0.2);
+}
 #mobile-ui {
   position: fixed;
   inset: auto 0 14px 0;
@@ -337,6 +371,20 @@ html, body {
 </div>
 
 <div id="msg-area"></div>
+<div id="hotbar-ui">
+  <div class="hotbar-panel hotbar-left">
+    <button class="hotbar-btn" id="hotbar-btn-1">1</button>
+    <button class="hotbar-btn" id="hotbar-btn-2">2</button>
+    <button class="hotbar-btn" id="hotbar-btn-3">3</button>
+    <button class="hotbar-btn" id="hotbar-btn-4">4</button>
+  </div>
+  <div class="hotbar-panel hotbar-right">
+    <button class="hotbar-btn" id="hotbar-btn-5">5</button>
+    <button class="hotbar-btn" id="hotbar-btn-6">6</button>
+    <button class="hotbar-btn" id="hotbar-btn-7">7</button>
+    <button class="hotbar-btn" id="hotbar-btn-8">8</button>
+  </div>
+</div>
 <div id="mobile-ui">
   <div class="mobile-panel left">
     <div class="mobile-row">
@@ -344,7 +392,7 @@ html, body {
       <button class="mobile-btn" id="btn-jump">⤴</button>
       <button class="mobile-btn" id="btn-right">▶</button>
     </div>
-    <div class="mobile-label">移動 / 跳躍</div>
+    <div class="mobile-label">可同時按住跳躍+左右</div>
   </div>
   <div class="mobile-panel right">
     <div class="mobile-row">
@@ -923,27 +971,24 @@ let score = 0;
 function spawnEntities(){
   entities = [];
 
-  // 修正：在玩家畫面附近生成動物，確保玩家能看到
   const spawnX = Math.floor(pl.x / TS);
-  const spawnY = surf[spawnX];
 
-  // 在玩家左右各生成動物
+  // 在玩家畫面附近生成動物，優先放在玩家左/右側草地
   const nearbyPositions = [];
-  for(let i=-8; i<=8; i++){
+  for(let i=-10; i<=10; i++){
     const x = spawnX + i;
     if(x >= 5 && x < WW-5){
       const y = surf[x];
-      if(gb(x, y) === GRASS){
-        nearbyPositions.push({x: x*TS, y: (y-2)*TS});
+      if(gb(x,y)===GRASS){
+        nearbyPositions.push({x:x*TS, y:(y-2)*TS});
       }
     }
   }
 
-  // 在附近位置生成動物
   let animalCount = 0;
   for(const pos of nearbyPositions){
-    if(animalCount >= 15) break;
-    if(Math.random() < 0.4){
+    if(animalCount>=20) break;
+    if(Math.random() < 0.5){
       const r = Math.random();
       if(r<0.35) entities.push(new Entity(pos.x, pos.y, 'pig'));
       else if(r<0.65) entities.push(new Entity(pos.x, pos.y, 'cow'));
@@ -952,17 +997,18 @@ function spawnEntities(){
     }
   }
 
-  // 在更遠的地方也生成一些
-  for(let i=0;i<25;i++){
-    const offset = (Math.random() - 0.5) * 80;
-    const x = Math.max(10, Math.min(WW-10, Math.floor(spawnX + offset)));
-    const y = surf[x];
-    if(gb(x, y) !== GRASS) continue;
-
-    const r = Math.random();
-    if(r<0.35) entities.push(new Entity(x*TS, (y-2)*TS, 'pig'));
-    else if(r<0.65) entities.push(new Entity(x*TS, (y-2)*TS, 'cow'));
-    else entities.push(new Entity(x*TS, (y-2)*TS, 'chicken'));
+  // 如果附近草地太少，再增加幾隻遠處動物
+  if(animalCount < 10){
+    for(let i=0;i<30 && animalCount<15;i++){
+      const x = Math.max(10, Math.min(WW-10, Math.floor(spawnX + (Math.random()-0.5)*120)));
+      const y = surf[x];
+      if(gb(x,y)!==GRASS) continue;
+      const r = Math.random();
+      if(r<0.35) entities.push(new Entity(x*TS,(y-2)*TS,'pig'));
+      else if(r<0.65) entities.push(new Entity(x*TS,(y-2)*TS,'cow'));
+      else entities.push(new Entity(x*TS,(y-2)*TS,'chicken'));
+      animalCount++;
+    }
   }
 
   // 生成魚
@@ -2092,12 +2138,15 @@ function attemptPlaceBlock(){
 }
 
 function setMobileKey(code,value){
-  keys['ArrowLeft']=keys['a']=keys['A']=false;
-  keys['ArrowRight']=keys['d']=keys['D']=false;
-  keys['ArrowUp']=keys['w']=keys['W']=false;
-  if(value) keys[code]=true;
+  if(code==='ArrowLeft' || code==='ArrowRight' || code==='ArrowUp'){
+    if(code==='ArrowLeft') keys['ArrowLeft']=keys['a']=keys['A']=value;
+    if(code==='ArrowRight') keys['ArrowRight']=keys['d']=keys['D']=value;
+    if(code==='ArrowUp') keys['ArrowUp']=keys['w']=keys['W']=value;
+  }
 }
 
+const hotbarUI = document.getElementById('hotbar-ui');
+const hotbarButtons = Array.from({length:8}, (_,i)=>document.getElementById('hotbar-btn-'+(i+1)));
 const mobilePanel = document.getElementById('mobile-ui');
 const mobileButtons = {
   left: document.getElementById('btn-left'),
@@ -2114,9 +2163,12 @@ function isTouchInput(){
 }
 
 function updateMobileUI(){
-  const show = isTouchInput() && window.innerWidth > window.innerHeight;
+  const show = isTouchInput();
   if(mobilePanel){
-    mobilePanel.classList.toggle('visible', show);
+    mobilePanel.classList.toggle('visible', show && window.innerWidth > window.innerHeight);
+  }
+  if(hotbarUI){
+    hotbarUI.classList.toggle('visible', show);
   }
 }
 
@@ -2138,6 +2190,16 @@ bindMobileButton(mobileButtons.action, ()=>{ mleft=true; }, ()=>{ mleft=false; }
 if(mobileButtons.place){ mobileButtons.place.addEventListener('touchstart', e=>{ e.preventDefault(); attemptPlaceBlock(); }, {passive:false}); mobileButtons.place.addEventListener('mousedown', e=>{ e.preventDefault(); attemptPlaceBlock(); }); }
 if(mobileButtons.craft){ mobileButtons.craft.addEventListener('click', openCrafting); }
 if(mobileButtons.eat){ mobileButtons.eat.addEventListener('click', eatFood); }
+
+for(let i=0;i<hotbarButtons.length;i++){
+  const btn = hotbarButtons[i];
+  if(!btn) continue;
+  btn.addEventListener('click', ()=>{
+    slot = i;
+    hotbarButtons.forEach((b,j)=> b.classList.toggle('selected', j===i));
+    showMsg('切換到 ['+(i+1)+'] ' + (NAMES[hotbar[slot]] || '空'));
+  });
+}
 
 window.addEventListener('resize', updateMobileUI);
 window.addEventListener('orientationchange', updateMobileUI);
