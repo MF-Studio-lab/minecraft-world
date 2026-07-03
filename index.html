@@ -1,3 +1,8 @@
+let respawnTimer = 1200;
+function spawnEntities(reset=true){
+  // ensure fish spawn in open water (not inside solid)
+  // ensure not spawning directly under player and pick nearest grass/ground
+  // find a nearby surface position that's not solid above
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -411,9 +416,17 @@ html, body {
 <script>
 const cv = document.getElementById('c');
 const cx = cv.getContext('2d');
-const W = Math.min(window.innerWidth, 1024);
-const H = Math.min(window.innerHeight, 640);
+let W = Math.min(window.innerWidth, 1024);
+let H = Math.min(window.innerHeight, 640);
 cv.width = W; cv.height = H;
+
+function resizeCanvas(){
+  W = Math.min(window.innerWidth, 1024);
+  H = Math.min(window.innerHeight, 640);
+  cv.width = W; cv.height = H;
+}
+window.addEventListener('resize', ()=>{ resizeCanvas(); updateMobileUI(); });
+window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ resizeCanvas(); updateMobileUI(); },120); });
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TS = 32;
@@ -983,8 +996,8 @@ let entities = [];
 let projectiles = [];
 let score = 0;
 
-function spawnEntities(){
-  entities = [];
+function spawnEntities(reset=true){
+  if(reset) entities = [];
 
   const spawnX = Math.floor(pl.x / TS);
 
@@ -1074,6 +1087,7 @@ const pl = { x:0,y:0,vx:0,vy:0,w:TS*0.75,h:TS*1.85,onGround:false,
              inv:0,poisonTimer:0,attackCD:0,arrowCD:0,
              oxygen:100, maxOxygen:100 };
 const cam = { x:0,y:0 };
+let lastCamRenderX = 0;
 const keys = {};
 let mx=0,my=0,mleft=false;
 // 修正：初始快捷欄使用可放置方塊，所有欄位都可以放任何物品
@@ -1289,6 +1303,13 @@ function update(){
   if(pl.arrowCD > 0) pl.arrowCD--;
 
   if(placeCD>0) placeCD--;
+
+  // respawn periodic entities (animals/fish) to repopulate world
+  respawnTimer--;
+  if(respawnTimer <= 0){
+    spawnEntities(false);
+    respawnTimer = 1200 + Math.floor(Math.random()*600);
+  }
 
   // Sapling growth
   for(let i=plantedSaplings.length-1;i>=0;i--){
@@ -1560,14 +1581,22 @@ function render(){
   const depth=plTileY-plSurf;
   const darkVal=Math.max(0,Math.min(0.72,depth*0.018));
 
-  const sx0=Math.floor(cam.x/TS)-1, sx1=Math.ceil((cam.x+W)/TS)+1;
+  // choose a render cam.x that's nearest to last render to avoid rapid wrap jitter
+  const worldPx = WW*TS;
+  let renderCamX = cam.x;
+  while(Math.abs(renderCamX - lastCamRenderX) > worldPx/2){
+    if(renderCamX > lastCamRenderX) renderCamX -= worldPx; else renderCamX += worldPx;
+  }
+  lastCamRenderX = renderCamX;
+
+  const sx0=Math.floor(renderCamX/TS)-2, sx1=Math.ceil((renderCamX+W)/TS)+2;
   const sy0=Math.floor(cam.y/TS)-1, sy1=Math.ceil((cam.y+H)/TS)+1;
 
   for(let ty=sy0;ty<=sy1;ty++){
     for(let tx=sx0;tx<=sx1;tx++){
       const b=gb(tx,ty);
       if(b===AIR) continue;
-      const bx=Math.round(tx*TS-cam.x), by=Math.round(ty*TS-cam.y);
+      const bx=Math.round(tx*TS-renderCamX), by=Math.round(ty*TS-cam.y);
       let bp=0,bmax=1;
       if(breaking&&breaking.x===tx&&breaking.y===ty){ bp=breaking.p; bmax=breaking.max; }
       drawBlock(b,bx,by,TS,bp,bmax);
@@ -1592,11 +1621,13 @@ function render(){
   drawPlayer();
 
   const t=getTile();
-  if(tileReach(t.x,t.y)&&gb(t.x,t.y)!==AIR){
-    cx.strokeStyle='rgba(255,255,255,0.7)';
-    cx.lineWidth=2;
-    cx.strokeRect(t.x*TS-cam.x+1,t.y*TS-cam.y+1,TS-2,TS-2);
-  }
+  // always draw selection box at target tile to indicate where action will occur
+  const selX = Math.floor((t.x*TS) - renderCamX);
+  const selY = Math.floor((t.y*TS) - cam.y);
+  cx.lineWidth=2;
+  if(tileReach(t.x,t.y)) cx.strokeStyle='rgba(255,255,255,0.9)';
+  else cx.strokeStyle='rgba(255,255,255,0.35)';
+  cx.strokeRect(selX+1, selY+1, TS-2, TS-2);
 
   drawHUD();
 }
@@ -1820,6 +1851,19 @@ function clickCraftSlot(idx){
 
 function selectInvItem(itemId){
   craftSelectedItem = itemId;
+  // sync with hotbar: put into hotbar if not present, then select that slot
+  let hi = hotbar.indexOf(itemId);
+  if(hi === -1){
+    // find an empty or replaceable hotbar slot
+    hi = hotbar.findIndex(h => h===AIR || h===GRASS || h===DIRT || h===SAND);
+    if(hi === -1) hi = slot;
+    hotbar[hi] = itemId;
+  }
+  slot = hi;
+  // update UI buttons if present
+  if(typeof hotbarButtons !== 'undefined'){
+    hotbarButtons.forEach((b,j)=>{ if(b) b.classList.toggle('selected', j===slot); });
+  }
   updateCraftingUI();
 }
 
