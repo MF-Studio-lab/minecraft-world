@@ -351,55 +351,75 @@ html, body {
 }
 #calibration-screen {
   display: none;
-  flex-direction: column;
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  padding: 20px;
+  background: rgba(10,10,15,0.95);
+  justify-content: center;
   align-items: center;
-  gap: 12px;
-  margin-top: 14px;
-  width: 100%;
-  max-width: 420px;
-  padding: 14px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 16px;
+  pointer-events: auto;
 }
 #calibration-screen.visible { display: flex; }
 .calibration-title {
   color: #fff;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: bold;
 }
 .calibration-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  grid-template-rows: repeat(2, 100px);
-  gap: 10px;
+  position: relative;
   width: 100%;
-  max-width: 360px;
+  height: 100%;
+  max-width: 520px;
+  max-height: 420px;
 }
-#calibrate-up { grid-column: 2; grid-row: 1; }
-#calibrate-right { grid-column: 3; grid-row: 1 / span 2; }
-#calibrate-down { grid-column: 2; grid-row: 2; }
 .calibration-box {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 18px;
+  border: 2px solid rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  font-size: 24px;
+  font-weight: bold;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 18px;
-  border: 2px solid rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.08);
-  color: #fff;
-  font-size: 20px;
-  font-weight: bold;
-  cursor: pointer;
+}
+#calibrate-up {
+  top: 10%;
+  left: 50%;
+  transform: translate(-50%, 0);
+}
+#calibrate-down {
+  bottom: 10%;
+  left: 50%;
+  transform: translate(-50%, 0);
+}
+#calibrate-right {
+  top: 50%;
+  right: 10%;
+  transform: translate(0, -50%);
+}
+.calibration-box:hover,
+.calibration-box:active {
+  transform: scale(0.98);
 }
 .calibration-box.selected {
   border-color: #4fc3f7;
-  background: rgba(79,195,247,0.18);
+  background: rgba(79,195,247,0.22);
 }
-.calibration-instructions {
+.calibration-instructions,
+#calibration-data {
   color: #a8e0ff;
-  font-size: 0.95em;
+  font-size: 1em;
   text-align: center;
   line-height: 1.4;
+}
+#calibration-data {
+  margin-top: 6px;
 }
 @keyframes fadeOut {
   0% { opacity: 1; }
