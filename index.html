@@ -1281,6 +1281,8 @@ let plantedSaplings = [];
 let dragSource = null;
 let dayTime = 6200;
 let lastMonsterSpawn = 0;
+// timer for periodic respawn of passive entities (frames)
+let respawnTimer = 1200 + Math.floor(Math.random()*600);
 let craftingOpen = false;
 
 // ─── Physics ──────────────────────────────────────────────────────────────────
