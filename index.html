@@ -288,6 +288,7 @@ html, body {
   display: none;
   justify-content: space-between;
   align-items: flex-end;
+  flex-wrap: wrap;
   padding: 0 12px;
   z-index: 90;
   pointer-events: none;
@@ -297,12 +298,29 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 40%;
 }
 #mobile-ui .mobile-panel.left {
   align-items: flex-start;
 }
 #mobile-ui .mobile-panel.right {
   align-items: flex-end;
+}
+#mobile-ui.portrait {
+  flex-direction: column;
+  align-items: center;
+  bottom: 14px;
+}
+#mobile-ui.portrait .mobile-panel {
+  width: 100%;
+  align-items: center;
+}
+#mobile-ui.portrait .mobile-row {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+#mobile-ui.portrait .mobile-label {
+  text-align: center;
 }
 #mobile-ui .mobile-btn {
   width: 68px;
@@ -367,6 +385,12 @@ html, body {
         <option value="3.2">超快 (18秒)</option>
       </select>
     </div>
+
+    <div class="setting-row" id="calibration-row">
+      <label>📐 定位校正:</label>
+      <button onclick="runCalibration()">🔧 校正螢幕方向</button>
+    </div>
+    <div id="calibration-result" style="color:#a8e0ff; font-size:0.95em; line-height:1.4; text-align:center; margin-top:4px;">目前: 尚未校正</div>
 
     <button onclick="startGame()">🚀 開始遊戲！</button>
   </div>
@@ -470,8 +494,8 @@ function resizeCanvas(){
   H = Math.min(window.innerHeight, 640);
   cv.width = W; cv.height = H;
 }
-window.addEventListener('resize', ()=>{ resizeCanvas(); updateMobileUI(); });
-window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ resizeCanvas(); updateMobileUI(); },120); });
+window.addEventListener('resize', ()=>{ resizeCanvas(); updateMobileUI(); runCalibration(); });
+window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ resizeCanvas(); updateMobileUI(); runCalibration(); },120); });
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TS = 32;
@@ -838,7 +862,8 @@ class Entity {
 
   draw(){
     if(this.dead) return;
-    const sx = Math.round(this.x - renderCamX);
+    const rx = wrapRenderX(this.x);
+    const sx = Math.round(rx - renderCamX);
     const sy = Math.round(this.y - cam.y);
     if(sx < -50 || sx > W+50 || sy < -50 || sy > H+50) return;
 
@@ -1024,7 +1049,8 @@ class Projectile {
   }
   draw(){
     if(this.dead) return;
-    const sx = Math.round(this.x - renderCamX);
+    const rx = wrapRenderX(this.x);
+    const sx = Math.round(rx - renderCamX);
     const sy = Math.round(this.y - cam.y);
     cx.save();
     cx.translate(sx, sy);
@@ -1116,13 +1142,12 @@ function spawnMonsters(){
   const playerX = Math.floor(pl.x/TS);
   for(let i=0;i<spawnCount;i++){
     const side = Math.random()>0.5?1:-1;
-    let x = playerX + side*(10 + Math.floor(Math.random()*6));
+    let x = playerX + side*(10 + Math.floor(Math.random()*8));
     x = ((x % WW) + WW) % WW;
-    if(Math.abs(x - playerX) < 4) x = ((x + side*4) % WW + WW) % WW;
     let spawned = false;
-    for(let offset=0; offset<8 && !spawned; offset++){
+    for(let offset=0; offset<12 && !spawned; offset++){
       const gx = ((x + side*offset) % WW + WW) % WW;
-      if(Math.abs(gx - playerX) < 4) continue;
+      if(Math.abs(wrapDistance(gx, playerX)) < 6) continue;
       const sy = surf[gx];
       if(sy <= 2) continue;
       if(gb(gx, sy)===GRASS && gb(gx, sy-1)===AIR){
@@ -1133,7 +1158,7 @@ function spawnMonsters(){
       }
     }
     if(!spawned){
-      const fallbackX = ((playerX + side*12) % WW + WW) % WW;
+      const fallbackX = ((playerX + side*14) % WW + WW) % WW;
       const sy = surf[fallbackX];
       if(gb(fallbackX, sy)===GRASS && gb(fallbackX, sy-1)===AIR){
         const spawnY = (sy-1)*TS - TS*0.8;
@@ -1204,8 +1229,30 @@ function collideH(){
 }
 
 // ─── Mouse tile ───────────────────────────────────────────────────────────────
-function getTile(){ const camX = typeof renderCamX !== 'undefined' ? renderCamX : cam.x; return { x:Math.floor((mx+camX)/TS), y:Math.floor((my+cam.y)/TS) }; }
-function tileReach(tx,ty){ return Math.hypot(tx*TS+TS/2-(pl.x+pl.w/2), ty*TS+TS/2-(pl.y+pl.h/2)) < 5.5*TS; }
+function wrapDistance(a,b){
+  let d = ((a - b) % WW + WW) % WW;
+  if(d > WW/2) d -= WW;
+  return d;
+}
+function getTile(){
+  const camX = typeof renderCamX !== 'undefined' ? renderCamX : cam.x;
+  const x = Math.floor((mx + camX) / TS);
+  const y = Math.floor((my + cam.y) / TS);
+  const px = Math.floor((pl.x + pl.w/2) / TS);
+  let nx = x;
+  const dx = x - px;
+  if(dx > WW/2) nx -= WW;
+  else if(dx < -WW/2) nx += WW;
+  return { x:nx, y };
+}
+function tileReach(tx,ty){
+  let dx = tx*TS + TS/2 - (pl.x + pl.w/2);
+  const worldPx = WW*TS;
+  while(dx > worldPx/2) dx -= worldPx;
+  while(dx < -worldPx/2) dx += worldPx;
+  const dy = ty*TS + TS/2 - (pl.y + pl.h/2);
+  return Math.hypot(dx, dy) < 5.5*TS;
+}
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 function update(){
@@ -1687,9 +1734,10 @@ function render(){
   }
 
   for(const p of particles){
+    const rx = wrapRenderX(p.x);
     cx.globalAlpha=p.life/45;
     cx.fillStyle=p.color;
-    cx.fillRect(p.x-renderCamX-p.sz/2,p.y-cam.y-p.sz/2,p.sz,p.sz);
+    cx.fillRect(rx-renderCamX-p.sz/2,p.y-cam.y-p.sz/2,p.sz,p.sz);
   }
   cx.globalAlpha=1;
 
@@ -2417,6 +2465,7 @@ function attemptDigDown(){
 function assignHotbarSlot(index, itemId){
   if(index < 0 || index >= hotbar.length) return;
   hotbar[index] = itemId;
+  slot = index;
   updateHotbarButtons();
   updateCraftingUI();
 }
@@ -2428,14 +2477,23 @@ function swapHotbarSlots(a,b){
   updateHotbarButtons();
   updateCraftingUI();
 }
+function wrapRenderX(x){
+  const worldPx = WW*TS;
+  let rx = x;
+  while(rx - renderCamX > worldPx/2) rx -= worldPx;
+  while(renderCamX - rx > worldPx/2) rx += worldPx;
+  return rx;
+}
 function isTouchInput(){
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
 }
 
 function updateMobileUI(){
   const show = isTouchInput();
+  const portrait = window.innerHeight > window.innerWidth;
   if(mobilePanel){
-    mobilePanel.classList.toggle('visible', show && window.innerWidth > window.innerHeight);
+    mobilePanel.classList.toggle('visible', show);
+    mobilePanel.classList.toggle('portrait', show && portrait);
   }
   if(hotbarUI){
     hotbarUI.classList.toggle('visible', show);
@@ -2506,6 +2564,23 @@ function startGame(){
   spawnEntities();
   loop();
 }
+
+function getOrientationMode(){
+  return window.innerHeight > window.innerWidth ? '直置' : '橫置';
+}
+function runCalibration(){
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const ratio = (width / height).toFixed(2);
+  const current = getOrientationMode();
+  const recommended = ratio < 1 ? '直置模式' : '橫置模式';
+  const result = document.getElementById('calibration-result');
+  if(result){
+    result.textContent = `目前: ${current} (${width}x${height}, ${ratio}) · 建議: ${recommended}`;
+  }
+}
+
+window.addEventListener('load', runCalibration);
 
 function loop(){
   update();
