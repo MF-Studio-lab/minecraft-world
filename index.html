@@ -1196,6 +1196,22 @@ function spawnEntities(reset=true){
   showMsg('🐟 水中發現了 '+fishCount+' 條魚!');
 }
 
+function findSpawnSpot(gx, playerX){
+  // 動態搜索合適的生成位置：從上往下找到第一個非 AIR 方塊，且上方有空間
+  if(Math.abs(wrapDistance(gx, playerX)) < 6) return null;
+  // 從上往下搜索，找到合適的生成位置
+  for(let y = 0; y < WH - 1; y++){
+    const block = gb(gx, y);
+    if(block !== AIR && block !== WATER && block !== LEAVES && block !== FLOWER && block !== TALL_GRASS){
+      // 找到第一個固體方塊，檢查上方是否有足夠空間
+      if(y > 0 && gb(gx, y - 1) === AIR && gb(gx, y - 2) === AIR){
+        return { x: gx, y: y };
+      }
+    }
+  }
+  return null;
+}
+
 function spawnMonsters(){
   if(!isNight()) return;
   const spawnCount = Math.floor(Math.random()*3)+2;
@@ -1207,11 +1223,9 @@ function spawnMonsters(){
     let spawned = false;
     for(let offset=0; offset<12 && !spawned; offset++){
       const gx = ((x + side*offset) % WW + WW) % WW;
-      if(Math.abs(wrapDistance(gx, playerX)) < 6) continue;
-      const sy = surf[gx];
-      if(sy <= 2) continue;
-      if(gb(gx, sy)===GRASS && gb(gx, sy-1)===AIR){
-        const spawnY = (sy-1)*TS - TS*0.8;
+      const spot = findSpawnSpot(gx, playerX);
+      if(spot){
+        const spawnY = (spot.y - 1)*TS - TS*0.8;
         if(Math.random()>0.5){ entities.push(new Entity(gx*TS, spawnY, 'zombie')); showMsg('⚠️ 殭屍出現了!'); }
         else { entities.push(new Entity(gx*TS, spawnY, 'skeleton')); showMsg('⚠️ 骷髏出現了!'); }
         spawned = true;
@@ -1219,9 +1233,9 @@ function spawnMonsters(){
     }
     if(!spawned){
       const fallbackX = ((playerX + side*14) % WW + WW) % WW;
-      const sy = surf[fallbackX];
-      if(gb(fallbackX, sy)===GRASS && gb(fallbackX, sy-1)===AIR){
-        const spawnY = (sy-1)*TS - TS*0.8;
+      const spot = findSpawnSpot(fallbackX, playerX);
+      if(spot){
+        const spawnY = (spot.y - 1)*TS - TS*0.8;
         if(Math.random()>0.5){ entities.push(new Entity(fallbackX*TS, spawnY, 'zombie')); showMsg('⚠️ 殭屍出現了!'); }
         else { entities.push(new Entity(fallbackX*TS, spawnY, 'skeleton')); showMsg('⚠️ 骷髏出現了!'); }
       }
@@ -1607,8 +1621,21 @@ function line(c,x1,y1,x2,y2){ c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.st
 
 // ─── Draw player ─────────────────────────────────────────────────────────────
 function drawPlayer(){
-  const rx = wrapRenderX(pl.x);
-  const x=Math.round(rx-renderCamX), y=Math.round(pl.y-cam.y);
+  const worldPx = WW*TS;
+  // 計算三個可能的 wrapped 位置，確保在邊界時也能正確顯示
+  const positions = [pl.x - worldPx, pl.x, pl.x + worldPx];
+  for(const px of positions){
+    const rx = wrapRenderX(px);
+    const x = Math.round(rx - renderCamX);
+    const y = Math.round(pl.y - cam.y);
+    // 如果這個位置在螢幕範圍內（加上一些緩衝），就繪製玩家
+    if(x < -100 || x > W + 100 || y < -100 || y > H + 100) continue;
+    drawPlayerAt(x, y);
+    // 只繪製一次，避免重複
+    break;
+  }
+}
+function drawPlayerAt(x, y){
   const w=pl.w, h=pl.h, f=pl.face;
   const leg=pl.onGround?Math.sin(pl.wf*Math.PI/2)*0.3:0;
 
