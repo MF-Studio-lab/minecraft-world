@@ -241,6 +241,47 @@ html, body {
   border-color: #ffd700;
   background: rgba(255,215,0,0.2);
 }
+#hotbar-assign-panel {
+  margin-bottom: 10px;
+}
+.hotbar-assign {
+  display: grid;
+  grid-template-columns: repeat(8, 46px);
+  gap: 6px;
+}
+.hotbar-slot {
+  width: 46px;
+  height: 58px;
+  border-radius: 12px;
+  border: 2px solid rgba(255,255,255,0.16);
+  background: rgba(30,30,30,0.9);
+  color: #fff;
+  font-size: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+}
+.hotbar-slot.dragover {
+  border-color: #ffd700;
+  background: rgba(255,215,0,0.18);
+}
+.hotbar-slot.selected {
+  box-shadow: inset 0 0 0 2px #ffd700;
+}
+.hotbar-slot .slot-label {
+  font-size: 10px;
+  opacity: 0.75;
+  margin-top: 2px;
+}
+.hotbar-note {
+  font-size: 12px;
+  color: #ccc;
+  margin-top: 6px;
+}
 #mobile-ui {
   position: fixed;
   inset: auto 0 14px 0;
@@ -361,6 +402,10 @@ html, body {
 
   <div id="inv-panel">
     <h4>📦 背包物品（點擊選擇）</h4>
+    <div id="hotbar-assign-panel">
+      <div class="hotbar-assign" id="hotbar-assign"></div>
+      <div class="hotbar-note">拖動物品到快捷鍵或將快捷鍵互換位置，以設定 1~8 快捷鍵。</div>
+    </div>
     <div class="inv-grid" id="inv-grid"></div>
   </div>
 
@@ -793,7 +838,7 @@ class Entity {
 
   draw(){
     if(this.dead) return;
-    const sx = Math.round(this.x - cam.x);
+    const sx = Math.round(this.x - renderCamX);
     const sy = Math.round(this.y - cam.y);
     if(sx < -50 || sx > W+50 || sy < -50 || sy > H+50) return;
 
@@ -979,7 +1024,7 @@ class Projectile {
   }
   draw(){
     if(this.dead) return;
-    const sx = Math.round(this.x - cam.x);
+    const sx = Math.round(this.x - renderCamX);
     const sy = Math.round(this.y - cam.y);
     cx.save();
     cx.translate(sx, sy);
@@ -1008,7 +1053,7 @@ function spawnEntities(reset=true){
     if(x >= 5 && x < WW-5){
       const y = surf[x];
       if(gb(x,y)===GRASS){
-        nearbyPositions.push({x:x*TS, y:(y-2)*TS});
+        nearbyPositions.push({x:x*TS, y:(y-1)*TS - TS*0.8});
       }
     }
   }
@@ -1032,18 +1077,29 @@ function spawnEntities(reset=true){
       const y = surf[x];
       if(gb(x,y)!==GRASS) continue;
       const r = Math.random();
-      if(r<0.35) entities.push(new Entity(x*TS,(y-2)*TS,'pig'));
-      else if(r<0.65) entities.push(new Entity(x*TS,(y-2)*TS,'cow'));
-      else entities.push(new Entity(x*TS,(y-2)*TS,'chicken'));
+      const spawnY = (y-1)*TS - TS*0.8;
+      if(r<0.35) entities.push(new Entity(x*TS, spawnY, 'pig'));
+      else if(r<0.65) entities.push(new Entity(x*TS, spawnY, 'cow'));
+      else entities.push(new Entity(x*TS, spawnY, 'chicken'));
       animalCount++;
     }
   }
 
-  // 生成魚
+  // 生成魚：優先放在玩家附近的水域
   let fishCount = 0;
-  for(let x=0;x<WW;x++){
-    for(let y=0;y<WH;y++){
-      if(gb(x,y)===WATER && Math.random()<0.04 && fishCount<50){
+  const playerX = Math.floor(pl.x/TS);
+  for(let dx=-18; dx<=18 && fishCount<20; dx++){
+    const x = ((playerX + dx) % WW + WW) % WW;
+    for(let y=0; y<WH && fishCount<20; y++){
+      if(gb(x,y)===WATER && Math.random() < 0.12){
+        entities.push(new Entity(x*TS+TS/2, y*TS+TS/2, 'fish'));
+        fishCount++;
+      }
+    }
+  }
+  for(let x=0;x<WW && fishCount<50;x++){
+    for(let y=0;y<WH && fishCount<50;y++){
+      if(gb(x,y)===WATER && Math.random()<0.02){
         entities.push(new Entity(x*TS+TS/2, y*TS+TS/2, 'fish'));
         fishCount++;
       }
@@ -1057,16 +1113,33 @@ function spawnEntities(reset=true){
 function spawnMonsters(){
   if(!isNight()) return;
   const spawnCount = Math.floor(Math.random()*3)+2;
+  const playerX = Math.floor(pl.x/TS);
   for(let i=0;i<spawnCount;i++){
     const side = Math.random()>0.5?1:-1;
-    const x = Math.max(5, Math.min(WW-5, Math.floor(pl.x/TS) + side*(12+Math.floor(Math.random()*15))));
-    const y = surf[x] - 2;
-    if(Math.random()>0.5){
-      entities.push(new Entity(x*TS, y*TS, 'zombie'));
-      showMsg('⚠️ 殭屍出現了!');
-    } else {
-      entities.push(new Entity(x*TS, y*TS, 'skeleton'));
-      showMsg('⚠️ 骷髏出現了!');
+    let x = playerX + side*(10 + Math.floor(Math.random()*6));
+    x = ((x % WW) + WW) % WW;
+    if(Math.abs(x - playerX) < 4) x = ((x + side*4) % WW + WW) % WW;
+    let spawned = false;
+    for(let offset=0; offset<8 && !spawned; offset++){
+      const gx = ((x + side*offset) % WW + WW) % WW;
+      if(Math.abs(gx - playerX) < 4) continue;
+      const sy = surf[gx];
+      if(sy <= 2) continue;
+      if(gb(gx, sy)===GRASS && gb(gx, sy-1)===AIR){
+        const spawnY = (sy-1)*TS - TS*0.8;
+        if(Math.random()>0.5){ entities.push(new Entity(gx*TS, spawnY, 'zombie')); showMsg('⚠️ 殭屍出現了!'); }
+        else { entities.push(new Entity(gx*TS, spawnY, 'skeleton')); showMsg('⚠️ 骷髏出現了!'); }
+        spawned = true;
+      }
+    }
+    if(!spawned){
+      const fallbackX = ((playerX + side*12) % WW + WW) % WW;
+      const sy = surf[fallbackX];
+      if(gb(fallbackX, sy)===GRASS && gb(fallbackX, sy-1)===AIR){
+        const spawnY = (sy-1)*TS - TS*0.8;
+        if(Math.random()>0.5){ entities.push(new Entity(fallbackX*TS, spawnY, 'zombie')); showMsg('⚠️ 殭屍出現了!'); }
+        else { entities.push(new Entity(fallbackX*TS, spawnY, 'skeleton')); showMsg('⚠️ 骷髏出現了!'); }
+      }
     }
   }
 }
@@ -1087,6 +1160,7 @@ const pl = { x:0,y:0,vx:0,vy:0,w:TS*0.75,h:TS*1.85,onGround:false,
              inv:0,poisonTimer:0,attackCD:0,arrowCD:0,
              oxygen:100, maxOxygen:100 };
 const cam = { x:0,y:0 };
+let renderCamX = 0;
 let lastCamRenderX = 0;
 const keys = {};
 let mx=0,my=0,mleft=false;
@@ -1098,6 +1172,7 @@ let placeCD = 0;
 const inventory = {};
 let particles = [];
 let plantedSaplings = [];
+let dragSource = null;
 let dayTime = 6200;
 let lastMonsterSpawn = 0;
 let craftingOpen = false;
@@ -1129,7 +1204,7 @@ function collideH(){
 }
 
 // ─── Mouse tile ───────────────────────────────────────────────────────────────
-function getTile(){ return { x:Math.floor((mx+cam.x)/TS), y:Math.floor((my+cam.y)/TS) }; }
+function getTile(){ const camX = typeof renderCamX !== 'undefined' ? renderCamX : cam.x; return { x:Math.floor((mx+camX)/TS), y:Math.floor((my+cam.y)/TS) }; }
 function tileReach(tx,ty){ return Math.hypot(tx*TS+TS/2-(pl.x+pl.w/2), ty*TS+TS/2-(pl.y+pl.h/2)) < 5.5*TS; }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -1171,12 +1246,14 @@ function update(){
   }
 
   // 怪物生成
-  if(isNight() && dayTime - lastMonsterSpawn > 2000){
+  const sinceLastMonster = lastMonsterSpawn===0 ? Infinity : (dayTime - lastMonsterSpawn + 24000) % 24000;
+  if(isNight() && (lastMonsterSpawn===0 || sinceLastMonster > 2000)){
     spawnMonsters();
     lastMonsterSpawn = dayTime;
   }
   if(!isNight()){
     entities = entities.filter(e => e.type!=='zombie' && e.type!=='skeleton');
+    lastMonsterSpawn = 0;
   }
 
   // Ground check
@@ -1207,14 +1284,15 @@ function update(){
   else if(pl.x > WW*TS - pl.w) pl.x -= WW*TS;
   if(pl.y>WH*TS){ pl.y=(surf[Math.floor(pl.x/TS)]-3)*TS; pl.vy=0; }
 
-  // Camera
-  const tcx=pl.x+pl.w/2-W/2, tcy=pl.y+pl.h/2-H/2;
-  cam.x+=(tcx-cam.x)*0.12;
-  cam.y+=(tcy-cam.y)*0.12;
-  // wrap camera horizontally as world is cyclic
+  // Camera: choose the closest wrapped player position for smooth transition
   const worldPx = WW*TS;
-  cam.x = ((cam.x % worldPx) + worldPx) % worldPx;
-  cam.y=Math.max(0,Math.min(WH*TS-H,cam.y));
+  let playerCamX = pl.x + pl.w/2 - W/2;
+  while(playerCamX - cam.x > worldPx/2) playerCamX -= worldPx;
+  while(cam.x - playerCamX > worldPx/2) playerCamX += worldPx;
+  const tcy = pl.y + pl.h/2 - H/2;
+  cam.x += (playerCamX - cam.x) * 0.12;
+  cam.y += (tcy - cam.y) * 0.12;
+  cam.y = Math.max(0, Math.min(WH*TS-H, cam.y));
 
   // Attack entities with left click
   if(mleft && pl.attackCD <= 0){
@@ -1423,7 +1501,7 @@ function line(c,x1,y1,x2,y2){ c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.st
 
 // ─── Draw player ─────────────────────────────────────────────────────────────
 function drawPlayer(){
-  const x=Math.round(pl.x-cam.x), y=Math.round(pl.y-cam.y);
+  const x=Math.round(pl.x-renderCamX), y=Math.round(pl.y-cam.y);
   const w=pl.w, h=pl.h, f=pl.face;
   const leg=pl.onGround?Math.sin(pl.wf*Math.PI/2)*0.3:0;
 
@@ -1583,7 +1661,7 @@ function render(){
 
   // choose a render cam.x that's nearest to last render to avoid rapid wrap jitter
   const worldPx = WW*TS;
-  let renderCamX = cam.x;
+  renderCamX = cam.x;
   while(Math.abs(renderCamX - lastCamRenderX) > worldPx/2){
     if(renderCamX > lastCamRenderX) renderCamX -= worldPx; else renderCamX += worldPx;
   }
@@ -1611,7 +1689,7 @@ function render(){
   for(const p of particles){
     cx.globalAlpha=p.life/45;
     cx.fillStyle=p.color;
-    cx.fillRect(p.x-cam.x-p.sz/2,p.y-cam.y-p.sz/2,p.sz,p.sz);
+    cx.fillRect(p.x-renderCamX-p.sz/2,p.y-cam.y-p.sz/2,p.sz,p.sz);
   }
   cx.globalAlpha=1;
 
@@ -1864,6 +1942,7 @@ function selectInvItem(itemId){
   if(typeof hotbarButtons !== 'undefined'){
     hotbarButtons.forEach((b,j)=>{ if(b) b.classList.toggle('selected', j===slot); });
   }
+  if(typeof updateHotbarButtons === 'function') updateHotbarButtons();
   updateCraftingUI();
 }
 
@@ -2052,6 +2131,43 @@ function updateCraftingUI(){
   invGrid.innerHTML = '';
   const items = Object.entries(inventory).filter(([id,count]) => count > 0);
 
+  if(hotbarAssign){
+    hotbarAssign.innerHTML = '';
+    for(let i=0;i<hotbar.length;i++){
+      const itemId = hotbar[i];
+      const slotEl = document.createElement('div');
+      slotEl.className = 'hotbar-slot' + (i===slot ? ' selected' : '');
+      slotEl.draggable = true;
+      slotEl.dataset.index = i;
+      slotEl.innerHTML = (EMOJIS[itemId]||'') + '<div class="slot-label">'+(i+1)+'</div>';
+      slotEl.title = NAMES[itemId] || '空';
+      slotEl.addEventListener('dragstart', e => {
+        dragSource = {type:'hotbar', index:i, itemId};
+      });
+      slotEl.addEventListener('dragover', e => { e.preventDefault(); slotEl.classList.add('dragover'); });
+      slotEl.addEventListener('dragleave', () => { slotEl.classList.remove('dragover'); });
+      slotEl.addEventListener('drop', e => {
+        e.preventDefault(); slotEl.classList.remove('dragover');
+        const targetIndex = parseInt(slotEl.dataset.index,10);
+        if(dragSource){
+          if(dragSource.type==='inv') assignHotbarSlot(targetIndex, dragSource.itemId);
+          else if(dragSource.type==='hotbar') swapHotbarSlots(dragSource.index, targetIndex);
+        }
+        dragSource = null;
+      });
+      slotEl.addEventListener('click', () => {
+        if(dragSource && dragSource.type==='inv'){
+          assignHotbarSlot(i, dragSource.itemId);
+          dragSource = null;
+        } else {
+          slot = i;
+          hotbarButtons.forEach((b,j)=> b.classList.toggle('selected', j===slot));
+        }
+      });
+      hotbarAssign.appendChild(slotEl);
+    }
+  }
+
   if(items.length === 0){
     invGrid.innerHTML = '<div style="color:#888;grid-column:1/-1;text-align:center;">背包是空的</div>';
   } else {
@@ -2061,6 +2177,11 @@ function updateCraftingUI(){
       div.className = 'inv-item' + (craftSelectedItem===itemId?' selected':'');
       div.innerHTML = (EMOJIS[itemId]||'❓') + '<span class="cnt">'+count+'</span>';
       div.title = NAMES[itemId] || '?';
+      div.draggable = true;
+      div.addEventListener('dragstart', () => { dragSource = {type:'inv', itemId}; });
+      div.addEventListener('dragend', () => { dragSource = null; });
+      div.addEventListener('touchstart', () => { dragSource = {type:'inv', itemId}; });
+      div.addEventListener('touchend', () => { if(dragSource && dragSource.type==='inv') dragSource = null; });
       div.onclick = () => selectInvItem(itemId);
       invGrid.appendChild(div);
     }
@@ -2174,6 +2295,7 @@ window.addEventListener('keydown',e=>{
 window.addEventListener('keyup',e=>{ keys[e.key]=false; });
 
 cv.addEventListener('mousemove',e=>{ const r=cv.getBoundingClientRect(); mx=e.clientX-r.left; my=e.clientY-r.top; });
+cv.addEventListener('touchmove',e=>{ e.preventDefault(); const r=cv.getBoundingClientRect(); mx=e.touches[0].clientX-r.left; my=e.touches[0].clientY-r.top; },{passive:false});
 
 cv.addEventListener('mousedown',e=>{
   e.preventDefault();
@@ -2269,6 +2391,7 @@ function setMobileKey(code,value){
 
 const hotbarUI = document.getElementById('hotbar-ui');
 const hotbarButtons = Array.from({length:8}, (_,i)=>document.getElementById('hotbar-btn-'+(i+1)));
+const hotbarAssign = document.getElementById('hotbar-assign');
 const mobilePanel = document.getElementById('mobile-ui');
 const mobileButtons = {
   left: document.getElementById('btn-left'),
@@ -2282,17 +2405,29 @@ const mobileButtons = {
 };
 
 function attemptDigDown(){
-  // target the tile just below player's feet
+  // target the tile directly below player's feet
   const tx = Math.floor((pl.x + pl.w/2)/TS);
-  const ty = Math.floor((pl.y + pl.h)/TS) + 1;
-  // set pointer coords so breaking logic targets this tile
-  mx = tx*TS + TS/2 - cam.x;
+  const ty = Math.floor((pl.y + pl.h)/TS);
+  mx = tx*TS + TS/2 - renderCamX;
   my = ty*TS + TS/2 - cam.y;
-  // simulate holding attack for a short moment
   mleft = true;
-  setTimeout(()=>{ mleft = false; }, 500);
+  setTimeout(()=>{ mleft = false; }, 350);
 }
 
+function assignHotbarSlot(index, itemId){
+  if(index < 0 || index >= hotbar.length) return;
+  hotbar[index] = itemId;
+  updateHotbarButtons();
+  updateCraftingUI();
+}
+function swapHotbarSlots(a,b){
+  if(a===b) return;
+  const tmp = hotbar[a];
+  hotbar[a] = hotbar[b];
+  hotbar[b] = tmp;
+  updateHotbarButtons();
+  updateCraftingUI();
+}
 function isTouchInput(){
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
 }
@@ -2333,7 +2468,17 @@ for(let i=0;i<hotbarButtons.length;i++){
   btn.addEventListener('click', ()=>{
     slot = i;
     hotbarButtons.forEach((b,j)=> b.classList.toggle('selected', j===i));
+    updateHotbarButtons();
     showMsg('切換到 ['+(i+1)+'] ' + (NAMES[hotbar[slot]] || '空'));
+  });
+}
+updateHotbarButtons();
+function updateHotbarButtons(){
+  hotbarButtons.forEach((btn,i)=>{
+    const item = hotbar[i];
+    btn.innerHTML = item ? (EMOJIS[item]||(i+1).toString()) : (i+1).toString();
+    btn.title = NAMES[item] || '空';
+    btn.classList.toggle('selected', i===slot);
   });
 }
 
