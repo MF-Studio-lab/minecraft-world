@@ -1,8 +1,3 @@
-let respawnTimer = 1200;
-function spawnEntities(reset=true){
-  // ensure fish spawn in open water (not inside solid)
-  // ensure not spawning directly under player and pick nearest grass/ground
-  // find a nearby surface position that's not solid above
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -354,6 +349,58 @@ html, body {
   margin-top: -4px;
   opacity: 0.9;
 }
+#calibration-screen {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  width: 100%;
+  max-width: 420px;
+  padding: 14px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+}
+#calibration-screen.visible { display: flex; }
+.calibration-title {
+  color: #fff;
+  font-size: 16px;
+  font-weight: bold;
+}
+.calibration-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: repeat(2, 100px);
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+}
+#calibrate-up { grid-column: 2; grid-row: 1; }
+#calibrate-right { grid-column: 3; grid-row: 1 / span 2; }
+#calibrate-down { grid-column: 2; grid-row: 2; }
+.calibration-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  border: 2px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.calibration-box.selected {
+  border-color: #4fc3f7;
+  background: rgba(79,195,247,0.18);
+}
+.calibration-instructions {
+  color: #a8e0ff;
+  font-size: 0.95em;
+  text-align: center;
+  line-height: 1.4;
+}
 @keyframes fadeOut {
   0% { opacity: 1; }
   70% { opacity: 1; }
@@ -388,9 +435,23 @@ html, body {
 
     <div class="setting-row" id="calibration-row">
       <label>📐 定位校正:</label>
-      <button onclick="runCalibration()">🔧 校正螢幕方向</button>
+      <button onclick="openCalibrationScreen()">🔧 開始校正</button>
     </div>
     <div id="calibration-result" style="color:#a8e0ff; font-size:0.95em; line-height:1.4; text-align:center; margin-top:4px;">目前: 尚未校正</div>
+
+    <div id="calibration-screen" class="calibration-screen">
+      <div id="calibration-mode-label" class="calibration-title">校正模式</div>
+      <div class="calibration-grid">
+        <button class="calibration-box" id="calibrate-up" onclick="selectCalibrationDirection('up', event)">上</button>
+        <button class="calibration-box" id="calibrate-right" onclick="selectCalibrationDirection('right', event)">右</button>
+        <button class="calibration-box" id="calibrate-down" onclick="selectCalibrationDirection('down', event)">下</button>
+      </div>
+      <div id="calibration-instructions" class="calibration-instructions">
+        點擊上、下、右三個格子以記錄目前方向模式的校正數據。
+      </div>
+      <div id="calibration-data" class="calibration-instructions"></div>
+      <button onclick="closeCalibrationScreen()">完成 / 取消校正</button>
+    </div>
 
     <button onclick="startGame()">🚀 開始遊戲！</button>
   </div>
@@ -1236,14 +1297,11 @@ function wrapDistance(a,b){
 }
 function getTile(){
   const camX = typeof renderCamX !== 'undefined' ? renderCamX : cam.x;
-  const x = Math.floor((mx + camX) / TS);
-  const y = Math.floor((my + cam.y) / TS);
-  const px = Math.floor((pl.x + pl.w/2) / TS);
-  let nx = x;
-  const dx = x - px;
-  if(dx > WW/2) nx -= WW;
-  else if(dx < -WW/2) nx += WW;
-  return { x:nx, y };
+  const adjusted = applyCalibration(mx, my);
+  return {
+    x: Math.floor((adjusted.x + camX) / TS),
+    y: Math.floor((adjusted.y + cam.y) / TS)
+  };
 }
 function tileReach(tx,ty){
   let dx = tx*TS + TS/2 - (pl.x + pl.w/2);
@@ -2540,8 +2598,101 @@ function updateHotbarButtons(){
   });
 }
 
-window.addEventListener('resize', updateMobileUI);
-window.addEventListener('orientationchange', updateMobileUI);
+const calibrationData = {
+  vertical: { up:null, down:null, right:null },
+  horizontal: { up:null, down:null, right:null }
+};
+const calibrationOffsets = { vertical:{x:0,y:0}, horizontal:{x:0,y:0} };
+let calibrationActive = false;
+let calibrationMode = null;
+
+function getOrientationMode(){
+  return window.innerHeight > window.innerWidth ? 'vertical' : 'horizontal';
+}
+function formatCalibrationMode(mode){
+  return mode === 'vertical' ? '直置' : '橫置';
+}
+function hasCalibrationReady(mode){
+  const data = calibrationData[mode];
+  return !!data.up && !!data.down && !!data.right;
+}
+function updateCalibrationInfo(){
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const ratio = (width / height).toFixed(2);
+  const currentMode = getOrientationMode();
+  const current = formatCalibrationMode(currentMode);
+  const result = document.getElementById('calibration-result');
+  if(result){
+    const verticalStatus = hasCalibrationReady('vertical') ? '已校正' : '未校正';
+    const horizontalStatus = hasCalibrationReady('horizontal') ? '已校正' : '未校正';
+    result.textContent = `目前: ${current} (${width}x${height}, ${ratio}) · 直置: ${verticalStatus} · 橫置: ${horizontalStatus}`;
+  }
+}
+function updateCalibrationScreen(){
+  const mode = calibrationMode || getOrientationMode();
+  const label = document.getElementById('calibration-mode-label');
+  const instructions = document.getElementById('calibration-instructions');
+  const dataInfo = document.getElementById('calibration-data');
+  if(label) label.textContent = `${formatCalibrationMode(mode)} 模式校正`;
+  if(instructions){
+    if(hasCalibrationReady(mode)){
+      instructions.textContent = `本模式校正已完成。請切換到另一種模式並重新校正，或關閉校正畫面開始遊戲。`;
+    } else {
+      instructions.textContent = `請點擊 上、下、右 三個格子，記錄 ${formatCalibrationMode(mode)} 模式的位置數據。`;
+    }
+  }
+  if(dataInfo){
+    const data = calibrationData[mode];
+    dataInfo.textContent = `已記錄: 上 ${data.up? '✓' : '✗'}  下 ${data.down? '✓' : '✗'}  右 ${data.right? '✓' : '✗'}`;
+  }
+  ['up','down','right'].forEach(dir=>{
+    const box = document.getElementById(`calibrate-${dir}`);
+    if(box) box.classList.toggle('selected', !!calibrationData[mode][dir]);
+  });
+}
+function computeCalibrationOffset(mode){
+  const data = calibrationData[mode];
+  if(!hasCalibrationReady(mode)) return {x:0,y:0};
+  const avgX = (data.up.x + data.down.x + data.right.x) / 3;
+  const avgY = (data.up.y + data.down.y + data.right.y) / 3;
+  const targetX = window.innerWidth / 2;
+  const targetY = window.innerHeight / 2;
+  return { x: targetX - avgX, y: targetY - avgY };
+}
+function applyCalibration(x,y){
+  const offset = calibrationOffsets[getOrientationMode()] || {x:0,y:0};
+  return { x: x + offset.x, y: y + offset.y };
+}
+function openCalibrationScreen(){
+  calibrationMode = getOrientationMode();
+  calibrationActive = true;
+  const screen = document.getElementById('calibration-screen');
+  if(screen) screen.classList.add('visible');
+  updateCalibrationInfo();
+  updateCalibrationScreen();
+}
+function closeCalibrationScreen(){
+  calibrationActive = false;
+  const screen = document.getElementById('calibration-screen');
+  if(screen) screen.classList.remove('visible');
+  updateCalibrationInfo();
+}
+function selectCalibrationDirection(direction,event){
+  if(!calibrationActive) return;
+  const mode = calibrationMode || getOrientationMode();
+  const rect = event.currentTarget.getBoundingClientRect();
+  calibrationData[mode][direction] = {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2
+  };
+  calibrationOffsets[mode] = computeCalibrationOffset(mode);
+  updateCalibrationScreen();
+  updateCalibrationInfo();
+}
+
+window.addEventListener('resize', ()=>{ resizeCanvas(); updateMobileUI(); updateCalibrationInfo(); });
+window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ resizeCanvas(); updateMobileUI(); updateCalibrationInfo(); },120); });
 updateMobileUI();
 
 // ─── Init & Loop ─────────────────────────────────────────────────────────────
@@ -2566,18 +2717,10 @@ function startGame(){
 }
 
 function getOrientationMode(){
-  return window.innerHeight > window.innerWidth ? '直置' : '橫置';
+  return window.innerHeight > window.innerWidth ? 'vertical' : 'horizontal';
 }
 function runCalibration(){
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-  const ratio = (width / height).toFixed(2);
-  const current = getOrientationMode();
-  const recommended = ratio < 1 ? '直置模式' : '橫置模式';
-  const result = document.getElementById('calibration-result');
-  if(result){
-    result.textContent = `目前: ${current} (${width}x${height}, ${ratio}) · 建議: ${recommended}`;
-  }
+  updateCalibrationInfo();
 }
 
 window.addEventListener('load', runCalibration);
