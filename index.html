@@ -91,6 +91,7 @@ html, body {
 }
 .craft-slot:hover { border-color: #ffd700; background: #6a4a2a; }
 .craft-slot .count { position: absolute; bottom: 2px; right: 4px; font-size: 12px; color: #fff; }
+
 #craft-result {
   display: flex; align-items: center; justify-content: center;
   gap: 15px; margin: 15px 0;
@@ -108,29 +109,7 @@ html, body {
 }
 #craft-btn:hover { background: #45a049; }
 #craft-btn:disabled { background: #666; cursor: not-allowed; }
-#auto-craft-btn {
-  padding: 12px 40px; font-size: 16px;
-  background: #2196F3; color: white; border: none; border-radius: 5px;
-  cursor: pointer; margin: 5px;
-  font-weight: bold;
-}
-#auto-craft-btn:hover { background: #1976D2; }
-#auto-craft-btn:disabled { background: #666; cursor: not-allowed; }
-#craft-list {
-  margin-top: 15px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
-  max-height: 200px;
-  overflow-y: auto;
-}
 .craft-item {
-  background: #3a2a1a;
-  border: 2px solid #5a3a1a;
-  border-radius: 6px;
-  padding: 10px;
-  cursor: pointer;
-  text-align: center;
   color: #ddd;
   font-size: 12px;
   transition: all 0.1s;
