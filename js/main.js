@@ -1,15 +1,15 @@
 // Main entry point
 import { CONFIG } from './config.js';
-import { genWorld, gb, sb } from './worldgen.js';
+import { genWorld } from './worldgen.js';
 import { BLOCKS } from './blocks.js';
 import { initPlayer, player, updatePlayer } from './player.js';
 import { initRender, render, updateCamera } from './render.js';
-import { initInput } from './input.js';
+import { initInput, handlePlayerInput } from './input.js';
 
 let gameRunning = false;
 let gameState = {};
 
-export async function initGame() {
+export function initGame() {
   if (gameRunning) return;
   gameRunning = true;
 
@@ -31,8 +31,12 @@ export async function initGame() {
 }
 
 function gameLoop() {
-  updatePlayer();
-  updateCamera(gameState.player);
+  // Ensure input is processed
+  if (gameState.player) {
+    handlePlayerInput(gameState.player);  // Direct call for responsiveness
+    updatePlayer();
+    updateCamera(gameState.player);
+  }
   render(gameState);
   requestAnimationFrame(gameLoop);
 }
