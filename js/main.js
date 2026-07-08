@@ -4,6 +4,7 @@ import { genWorld } from './worldgen.js';
 import { BLOCKS } from './blocks.js';
 import { initPlayer, player, updatePlayer } from './player.js';
 import { initRender, render, updateCamera } from './render.js';
+import { initInput, handlePlayerInput } from './input.js';
 
 let gameState = {
   canvas: null,
@@ -28,10 +29,14 @@ export function initGame() {
   // Render initialization
   initRender();
   
+  // Input initialization
+  initInput();
+  
   console.log('🌍 World generated successfully');
   console.log('📦 Blocks system ready with', Object.keys(BLOCKS).length, 'block types');
   console.log('👤 Player ready');
   console.log('🎨 Render system ready');
+  console.log('⌨️ Input system ready');
   
   // Start game loop
   gameLoop();
@@ -39,6 +44,7 @@ export function initGame() {
 
 export function gameLoop() {
   if (gameState.player) {
+    handlePlayerInput(gameState.player);
     updatePlayer();
     updateCamera(gameState.player);
   }
