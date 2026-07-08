@@ -26,15 +26,14 @@ export function updatePlayer() {
   player.x += collideH(player, player.vx);
   player.y += collideV(player, player.vy);
   
-  // Grounded check
-  if (player.vy > 0) {
-    const testY = player.y + player.h;
-    if (/* simple ground detect */) {
-      player.vy = 0;
-    }
+  // Grounded check (simplified)
+  const groundY = player.y + player.h;
+  if (player.vy >= 0) {
+    // TODO: better collision with gb()
+    player.vy = 0;
   }
   
   // Keep in bounds
   if (player.x < 0) player.x = 0;
-  if (player.x > CONFIG.WW * CONFIG.TS) player.x = CONFIG.WW * CONFIG.TS;
+  if (player.x > CONFIG.WW * CONFIG.TS - player.w) player.x = CONFIG.WW * CONFIG.TS - player.w;
 }

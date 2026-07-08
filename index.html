@@ -8,30 +8,21 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+<!-- Overlay and UI elements (shortened for module transition) -->
 <div id="overlay">
   <div class="box">
     <h1>⛏️ 小方塊世界 2.5 ⛏️</h1>
-    <!-- ... (keep UI HTML same as before) -->
     <button onclick="startGame()">🚀 開始遊戲！</button>
   </div>
 </div>
-<!-- crafting, death, mobile UI etc. copied from original -->
 <script type="module">
 import { initGame } from './js/main.js';
 
-window.startGame = async function() {
+window.startGame = function() {
   const overlay = document.getElementById('overlay');
   if (overlay) overlay.style.display = 'none';
-  await initGame();
-  console.log('🚀 Game started via window.startGame');
+  initGame();
 };
-
-// Stub legacy functions
-window.openCalibrationScreen = () => { console.log('Calibration stub'); };
-window.closeCalibrationScreen = () => { console.log('Close calibration'); };
-window.selectCalibrationDirection = () => {};
-window.closeCrafting = () => {};
-// Add more stubs as needed
 
 console.log('✅ Module entry loaded');
 </script>
