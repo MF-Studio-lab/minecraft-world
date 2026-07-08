@@ -19,10 +19,16 @@ export function initGame() {
   gameState.world = worldData.world;
   gameState.surf = worldData.surf;
   
+  // Player initialization
+  initPlayer(gameState.surf);
+  gameState.player = player; // from player.js
+  
   console.log('🌍 World generated successfully');
   console.log('📦 Blocks system ready with', Object.keys(BLOCKS).length, 'block types');
+  console.log('👤 Player ready');
   
-  // TODO: player init, rendering, input, etc. (next modules)
+  // Start game loop
+  gameLoop();
 }
 
 export function gameLoop() {
