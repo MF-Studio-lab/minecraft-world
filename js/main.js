@@ -2,6 +2,7 @@
 import { CONFIG } from './config.js';
 import { genWorld } from './worldgen.js';
 import { BLOCKS } from './blocks.js';
+import { initPlayer, player } from './player.js';
 
 let gameState = {
   canvas: null,
