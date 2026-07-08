@@ -1,65 +1,73 @@
-# ⛏️ 小方塊世界 2.4 (Minecraft World 2.4)
+# React + TypeScript + Vite
 
-這是一個完全基於 HTML5 Canvas 與 JavaScript 編寫的輕量級 2D 生存模擬遊戲，旨在還原《我的世界》(Minecraft) 的核心體驗。
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## 🚀 快速開始
-您可以直接透過瀏覽器訪問部署後的版本：
-👉 **[https://mf-studio-lab.github.io/minecraft-world/](https://mf-studio-lab.github.io/minecraft-world/)**
+Currently, two official plugins are available:
 
----
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-## 🆕 v2.4 版本更新日誌
-- **時間週期自定義**：可在開始前選擇晝夜交替速度。
-- **全新合成系統**：
-    - 增加可視化背包面板。
-    - 實現真正的 $3 \times 3$ 網格合成操作。
-    - 新增「一鍵合成」快速製作功能。
-- **地形優化**：河流生成算法改為路徑導向，地形更自然。
-- **新增玩法**：加入釣魚機制與更豐富的地下探索。
-- **平衡調整**：提升高級工具挖掘與攻擊威力，優化 UI 提示訊息。
+## React Compiler
 
----
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-## 🎮 遊戲指南
+## Expanding the ESLint configuration
 
-### 🕹️ 操作方式
-| 動作 | 鍵盤/滑鼠操作 | 說明 |
-| :--- | :--- | :--- |
-| **移動** | `WASD` 或 `方向鍵` | 在世界中前後左右移動 |
-| **跳躍** | `空格 (Space)` | 跳過障礙或攀爬 |
-| **挖掘** | `滑鼠左鍵 (按住)` | 採集方塊 (不同工具速度不同) |
-| **放置** | `滑鼠右鍵` | 將選中的方塊放置於世界中 |
-| **切換物品** | `1~8` 或 `滾輪` | 切換快捷欄中的方塊或工具 |
-| **合成表** | `E` | 開啟 3x3 合成界面 |
-| **進食** | `F` | 消耗食物恢復飢餓值與生命 |
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-### 🛠️ 核心系統
-- **世界生成**：使用隨機噪聲算法自動生成地形、河流、生物群落與地下礦脈（煤 $\rightarrow$ 鐵 $\rightarrow$ 金 $\rightarrow$ 鑽）。
-- **生存機制**：
-    - **生命值 (HP)**：被怪物攻擊或極度飢餓會扣血。
-    - **飢餓度**：隨著時間消耗，需挖掘並合成食物（如烤豬肉）來補充。
-- **晝夜循環**：
-    - **白天**：安全探索與建造。
-    - **夜晚**：殭屍與骷髏會隨機生成並追擊玩家。
-- **合成系統**：
-    - 支持經典的 3x3 合成邏輯。
-    - 可將原木 $\rightarrow$ 木板 $\rightarrow$ 各類工具（鎬、劍、弓）。
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
-### 💎 挖掘等級參考
-| 工具 | 可高效挖掘方塊 | 備註 |
-| :--- | :--- | :--- |
-| **木質工具** | 草地、泥土、原木 | 基礎起步 |
-| **石質工具** | 煤礦、石頭 | 提升速度 |
-| **鐵質工具** | 鐵礦、金礦 | 進階設備 |
-| **鑽石工具** | 鑽石礦 | 最高效率 |
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
 
----
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
 
-## 🛠️ 技術實作
-- **語言**: HTML5, CSS3, JavaScript (ES6+)
-- **渲染**: Canvas 2D API (使用 Emoji 作為圖標以實現零資源加載)
-- **物理**: 簡易 AABB 碰撞檢測與重力模擬
-- **地圖**: `Uint8Array` 格式的網格地圖存儲
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
-## 📄 授權
-本項目僅供學習與測試使用。
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
