@@ -2,7 +2,8 @@
 import { CONFIG } from './config.js';
 import { genWorld } from './worldgen.js';
 import { BLOCKS } from './blocks.js';
-import { initPlayer, player } from './player.js';
+import { initPlayer, player, updatePlayer } from './player.js';
+import { initRender, render, updateCamera } from './render.js';
 
 let gameState = {
   canvas: null,
@@ -22,19 +23,28 @@ export function initGame() {
   
   // Player initialization
   initPlayer(gameState.surf);
-  gameState.player = player; // from player.js
+  gameState.player = player;
+  
+  // Render initialization
+  initRender();
   
   console.log('🌍 World generated successfully');
   console.log('📦 Blocks system ready with', Object.keys(BLOCKS).length, 'block types');
   console.log('👤 Player ready');
+  console.log('🎨 Render system ready');
   
   // Start game loop
   gameLoop();
 }
 
 export function gameLoop() {
-  // update();
-  // render();
+  if (gameState.player) {
+    updatePlayer();
+    updateCamera(gameState.player);
+  }
+  
+  render(gameState);
+  
   requestAnimationFrame(gameLoop);
 }
 
