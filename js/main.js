@@ -1,62 +1,54 @@
-// Main entry point for Minecraft World 2.4 Refactored
+// Main entry point
 import { CONFIG } from './config.js';
 import { genWorld } from './worldgen.js';
 import { BLOCKS } from './blocks.js';
 import { initPlayer, player, updatePlayer } from './player.js';
 import { initRender, render, updateCamera } from './render.js';
-import { initInput, handlePlayerInput } from './input.js';
+import { initInput } from './input.js';
 
-let gameState = {
-  canvas: null,
-  ctx: null,
-  world: null,
-  player: null,
-  // ... other state
-};
+let gameRunning = false;
+let gameState = {};
 
-export function initGame() {
-  console.log('🚀 Minecraft World Refactored initialized');
+export async function initGame() {
+  if (gameRunning) return;
+  gameRunning = true;
+
+  console.log('🚀 Initializing full game...');
   
-  // World generation
+  // World
   const worldData = genWorld();
   gameState.world = worldData.world;
   gameState.surf = worldData.surf;
   
-  // Player initialization
+  // Player
   initPlayer(gameState.surf);
   gameState.player = player;
   
-  // Render initialization
+  // Render
   initRender();
   
-  // Input initialization
+  // Input
   initInput();
   
-  console.log('🌍 World generated successfully');
-  console.log('📦 Blocks system ready with', Object.keys(BLOCKS).length, 'block types');
-  console.log('👤 Player ready');
-  console.log('🎨 Render system ready');
-  console.log('⌨️ Input system ready');
+  console.log('✅ All modules loaded, BLOCKS count:', Object.keys(BLOCKS).length);
   
-  // Start game loop
+  // Game loop
   gameLoop();
 }
 
-export function gameLoop() {
+function gameLoop() {
+  // Basic update/render
   if (gameState.player) {
-    handlePlayerInput(gameState.player);
     updatePlayer();
     updateCamera(gameState.player);
   }
-  
   render(gameState);
-  
   requestAnimationFrame(gameLoop);
 }
 
-// Auto start when imported
+// Auto-init fallback
 if (typeof window !== 'undefined') {
   window.addEventListener('load', () => {
-    initGame();
+    console.log('📦 Modules ready');
   });
 }
