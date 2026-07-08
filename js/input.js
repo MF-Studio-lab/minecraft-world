@@ -1,33 +1,31 @@
-// input.js - Input Handling Module
+// input.js - Input Handling
 import { CONFIG } from './config.js';
 
 let keys = {};
 
 export function initInput() {
-  window.addEventListener('keydown', e => {
+  document.addEventListener('keydown', e => {
     keys[e.key.toLowerCase()] = true;
-    if ([' ', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();
+    if (e.key === ' ' || e.key.startsWith('Arrow')) e.preventDefault();
   });
   
-  window.addEventListener('keyup', e => {
+  document.addEventListener('keyup', e => {
     keys[e.key.toLowerCase()] = false;
   });
   
   console.log('⌨️ Input system initialized');
 }
 
-export function getKeys() {
-  return keys;
-}
-
-// Example usage in player update (can be extended)
 export function handlePlayerInput(player) {
-  const speed = CONFIG.SPEED || 3.5;
+  const speed = CONFIG.SPEED || 4.2;
   player.vx = 0;
   
   if (keys['a'] || keys['arrowleft']) player.vx = -speed;
   if (keys['d'] || keys['arrowright']) player.vx = speed;
-  if ((keys['w'] || keys['arrowup'] || keys[' ']) && player.vy === 0) {
-    player.vy = CONFIG.JUMP || -9;
+  
+  // Jump only when grounded (simple check)
+  if ((keys['w'] || keys['arrowup'] || keys[' ']) && Math.abs(player.vy) < 1) {
+    player.vy = CONFIG.JUMP || -10;
+    keys[' '] = false; // prevent repeat
   }
 }
